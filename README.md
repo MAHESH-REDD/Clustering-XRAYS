@@ -1,4 +1,215 @@
-🫁 Clustering-XRAYS: Unsupervised Analysis of Chest X-Ray Images
+# 🫁 Clustering-XRAYS: Unsupervised Analysis of Chest X-Ray Images
+
+## 🚀 1. Project Overview
+This repository contains the code and results for an **unsupervised clustering pipeline** applied to the **Kaggle Chest X-Ray Images (Pneumonia)** dataset.
+
+**Objective:**  
+To automatically group **NORMAL** and **PNEUMONIA** X-ray images by extracting handcrafted features and applying clustering algorithms.
+
+The workflow integrates:
+- Traditional computer vision descriptors (Histogram, HOG, LBP, Hu Moments)  
+- Feature normalization and dimensionality reduction (PCA)  
+- Clustering using **K-Means**, **Agglomerative Clustering**, and **DBSCAN**  
+- Evaluation using intrinsic metrics (Silhouette, Davies-Bouldin) and t-SNE visualization  
+
+📊 **Total Images Processed:** 11,712  
+🏆 **Best Result:** K-Means (K=2) — *Silhouette Score = 0.0836, Purity = 0.7297*
+
+---
+
+## 🧱 2. Pipeline Overview
+
+### 2.1 Data & Preprocessing
+
+All `.jpeg` or `.png` files from `train/`, `val/`, and `test/` are combined.
+
+```python
+import cv2, glob, numpy as np
+from tqdm import tqdm
+
+def load_images(folder):
+    paths = glob.glob(folder + '/**/*.jpeg', recursive=True)
+    imgs = []
+    for p in tqdm(paths):
+        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
+        img = cv2.resize(img, (256, 256))
+        imgs.append(img)
+    return np.array(imgs)
+
+images = load_images('chest_xray')
+print('Loaded', len(images), 'images')
+2.2 Feature Extraction
+Feature	Method	Key Parameters	Dimension
+Histogram	Global intensity distribution	256 bins	256
+HOG	Histogram of Oriented Gradients	orientations=9, pixels_per_cell=(8,8), cells_per_block=(2,2)	~34,596
+LBP	Local Binary Pattern	P=8, R=1, 59 uniform bins	59
+Hu Moments	Shape invariants	7 log-scaled moments	7
+
+➡️ Total Feature Vector Dimension: ≈ 34,918
+
+python
+Copy code
+from skimage.feature import hog, local_binary_pattern
+
+def extract_features(img):
+    # 1. Intensity Histogram
+    hist = cv2.calcHist([img], [0], None, [256], [0,256]).flatten()
+    
+    # 2. HOG
+    hog_feat = hog(img, orientations=9, pixels_per_cell=(8,8),
+                   cells_per_block=(2,2), block_norm='L2-Hys')
+    
+    # 3. LBP
+    lbp = local_binary_pattern(img, P=8, R=1, method='uniform')
+    lbp_hist, _ = np.histogram(lbp, bins=np.arange(0,60), range=(0,59))
+    
+    # 4. Hu Moments
+    hu = cv2.HuMoments(cv2.moments(img)).flatten()
+    hu = -np.sign(hu) * np.log10(np.abs(hu))  # log transform
+    
+    return np.hstack([hist, hog_feat, lbp_hist, hu])
+2.3 Feature Normalization & Reduction
+python
+Copy code
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+X = np.array([extract_features(img) for img in images])
+X_scaled = StandardScaler().fit_transform(X)
+
+# PCA for clustering
+pca = PCA(n_components=100, random_state=42)
+X_pca = pca.fit_transform(X_scaled)
+
+print("Explained variance (100 comps):", pca.explained_variance_ratio_.sum())
+📉 Explained Variance: ≈ 32.56% (100 components)
+For visualization → PCA (50 comps) → t-SNE (2D, perplexity=30)
+
+🤖 3. Clustering Methods & Parameters
+Method	Parameters	Silhouette ↑	Davies-Bouldin ↓	#Clusters
+K-Means	K=2 (Elbow/Silhouette)	0.0836	3.2148	2
+Agglomerative	Ward linkage, K=2	0.0756	3.4624	2
+DBSCAN	ε=2.5, MinPts=5	0.0319	0.8611	2 (+ noise)
+
+python
+Copy code
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+from sklearn.metrics import silhouette_score, davies_bouldin_score
+
+# K-Means
+kmeans = KMeans(n_clusters=2, random_state=42).fit(X_pca)
+# Agglomerative
+agg = AgglomerativeClustering(n_clusters=2, linkage='ward').fit(X_pca)
+# DBSCAN
+db = DBSCAN(eps=2.5, min_samples=5).fit(X_pca)
+
+for name, labels in {
+    "K-Means": kmeans.labels_,
+    "Agglomerative": agg.labels_,
+    "DBSCAN": db.labels_
+}.items():
+    s = silhouette_score(X_pca, labels)
+    d = davies_bouldin_score(X_pca, labels)
+    print(f"{name:15s} | Silhouette = {s:.4f} | DB Index = {d:.4f}")
+📊 3.1 Cluster Purity (vs True Labels)
+Method	Purity (%)
+K-Means	72.97
+Agglomerative	72.97
+DBSCAN	72.97
+
+Interpretation: All methods roughly separate NORMAL and PNEUMONIA groups.
+
+🎨 4. Visualization
+Dimensionality reduction to 2D via t-SNE for plotting:
+
+python
+Copy code
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+X_tsne = tsne.fit_transform(X_pca)
+
+plt.figure(figsize=(6,5))
+plt.scatter(X_tsne[:,0], X_tsne[:,1], c=kmeans.labels_, cmap='coolwarm', s=5)
+plt.title("K-Means Clusters (t-SNE 2D)")
+plt.savefig('clustering_outputs/kmeans_tsne.png')
+plt.show()
+Generated Figures:
+
+Copy code
+k_elbow.png | k_silhouette.png | kmeans_tsne.png | agg_tsne.png | dbscan_tsne.png | true_labels_tsne.png
+⚙️ 5. How to Run the Code
+🧩 Prerequisites
+Install dependencies:
+
+bash
+Copy code
+pip install numpy pandas opencv-python scikit-image scikit-learn matplotlib tqdm
+▶️ Execution
+bash
+Copy code
+git clone https://github.com/MAHESH-REDD/Clustering-XRAYS.git
+cd Clustering-XRAYS
+
+# Download Kaggle dataset
+# Place inside ./chest_xray/train/, ./val/, ./test/
+
+jupyter notebook Maheshreddy.ipynb
+All results are saved automatically in clustering_outputs/.
+
+📊 6. Evaluation Summary
+Metric	Description	Interpretation
+Silhouette Score	Cluster cohesion & separation (−1 to 1)	> 0 = better separation
+Davies-Bouldin Index	Ratio of within-/between-cluster scatter	Lower = better
+Purity	Match between clusters and true labels	Higher = better
+
+Observation:
+➡️ K-Means achieved best Silhouette and label alignment.
+
+🔬 7. Recommendations
+Feature Engineering: Try larger HOG cells (16×16) or CNN embeddings (VGG, ResNet).
+
+Parameter Tuning: Use k-distance plots to optimize DBSCAN ε and MinPts.
+
+Hybrid Approach: Combine PCA + t-SNE for robust visual clustering.
+
+📁 8. Directory Structure
+bash
+Copy code
+chest_xray/
+ ├─ train/
+ ├─ val/
+ ├─ test/
+clustering_outputs/
+ ├─ xray_features_scaled.csv
+ ├─ xray_features_with_clusters.csv
+ ├─ clustering_evaluation.csv
+ ├─ cluster_purity.csv
+ ├─ k_elbow.png
+ ├─ k_silhouette.png
+ ├─ kmeans_tsne.png
+ ├─ agg_tsne.png
+ ├─ dbscan_tsne.png
+ ├─ true_labels_tsne.png
+ └─ dendrogram_sample.png
+🧾 9. Technical Notes
+Distance Metric: Euclidean (L₂)
+
+PCA Components: 100 for clustering (32.56% variance explained)
+
+t-SNE: perplexity=30, learning rate=200
+
+Random Seed: 42 (reproducibility)
+
+🧠 10. Conclusion
+K-Means (K=2) produced the most coherent clusters.
+
+Agglomerative and DBSCAN achieved similar purity (~73%).
+
+Handcrafted features (HOG/LBP/Histogram) capture some structure but not full semantics.
+
+Future improvement: integrate deep CNN features for higher diagnostic accuracy.
 
 🚀 1. Project Overview
 
