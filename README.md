@@ -585,10 +585,3 @@ clustering_outputs/
  ├─ dbscan_tsne.png
  ├─ true_labels_tsne.png
  ├─ dendrogram_sample.png
-
-🧾 8. Credits
-
-Author: Mahesh Reddy D
-Date: October 2025
-Course: Computer Vision & Clustering Assignment
-Dataset: Chest X-Ray Images (Pneumonia) — Kaggle
