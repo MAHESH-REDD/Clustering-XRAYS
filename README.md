@@ -1,6 +1,6 @@
 # 🫁 Clustering-XRAYS: Unsupervised Analysis of Chest X-Ray Images
 
-## 🚀 1. Project Overview
+##  1. Project Overview
 This repository contains the code and results for an **unsupervised clustering pipeline** applied to the **Kaggle Chest X-Ray Images (Pneumonia)** dataset.
 
 **Objective:**  
@@ -229,14 +229,8 @@ Evaluation using intrinsic metrics and t-SNE visualizations
 📊 Total Images Processed: 11,712
 🏆 Best Result: K-Means (K=2) — Silhouette Score = 0.0836, Purity = 0.7297
 
-# 🫁 Clustering-XRAYS: Unsupervised Analysis of Chest X-Ray Images
 
-## 🚀 1. Project Overview
-This repository contains the code and results for an **unsupervised clustering pipeline** applied to the **Kaggle Chest X-Ray Images (Pneumonia)** dataset.
 
-**Goal:** build a visual-feature extraction pipeline (intensity + shape + texture) and test if clustering algorithms can naturally group **NORMAL** vs **PNEUMONIA** images.
-
-The pipeline combines:
 - classic computer-vision descriptors (Histogram + HOG + LBP + Hu Moments)
 - normalization + PCA reduction
 - clustering via **K-Means**, **Agglomerative**, and **DBSCAN**
@@ -247,84 +241,8 @@ All results and figures are saved in `clustering_outputs/`.
 
 ---
 
-## 🧱 2. Pipeline Overview
 
-### 2.1 Data & Preprocessing
-Images from `train/`, `val/`, and `test/` are merged.
-
-```python
-import cv2, glob, numpy as np
-from tqdm import tqdm
-
-def load_images(folder):
-    paths = glob.glob(folder + '/**/*.jpeg', recursive=True)
-    imgs = []
-    for p in tqdm(paths):
-        img = cv2.imread(p, cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, (256,256))
-        imgs.append(img)
-    return np.array(imgs)
-
-images = load_images('chest_xray')
-print('Loaded', len(images), 'images')
-
-2.2 Feature Extraction
-Descriptor	Method	Key Parameters	Dim
-Histogram	Global Intensity	bins = 256	256
-HOG	Histogram of Oriented Gradients	orientations = 9, pixels_per_cell = (8, 8), cells_per_block = (2, 2)	34 596
-LBP	Local Binary Pattern	P = 8, R = 1 (radius), 59 uniform bins	59
-Hu Moments	Shape Invariants	7 log-scaled moments	7
-Total Feature Vector ≈ 34 918 dims
-
-from skimage.feature import hog, local_binary_pattern
-import cv2, numpy as np
-
-def extract_features(img):
-    hist = cv2.calcHist([img],[0],None,[256],[0,256]).flatten()
-    hog_feat = hog(img, orientations=9, pixels_per_cell=(8,8),
-                   cells_per_block=(2,2), block_norm='L2-Hys')
-    lbp = local_binary_pattern(img, P=8, R=1, method='uniform')
-    lbp_hist, _ = np.histogram(lbp, bins=np.arange(0,60), range=(0,59))
-    hu = cv2.HuMoments(cv2.moments(img)).flatten()
-    hu = -np.sign(hu)*np.log10(np.abs(hu))  # log transform
-    return np.hstack([hist, hog_feat, lbp_hist, hu])
-
-from skimage.feature import hog, local_binary_pattern
-import cv2, numpy as np
-
-def extract_features(img):
-    hist = cv2.calcHist([img],[0],None,[256],[0,256]).flatten()
-    hog_feat = hog(img, orientations=9, pixels_per_cell=(8,8),
-                   cells_per_block=(2,2), block_norm='L2-Hys')
-    lbp = local_binary_pattern(img, P=8, R=1, method='uniform')
-    lbp_hist, _ = np.histogram(lbp, bins=np.arange(0,60), range=(0,59))
-    hu = cv2.HuMoments(cv2.moments(img)).flatten()
-    hu = -np.sign(hu)*np.log10(np.abs(hu))  # log transform
-    return np.hstack([hist, hog_feat, lbp_hist, hu])
-2.3 Feature Normalization & Reduction
-python
-Copy code
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-
-X = np.array([extract_features(img) for img in images])
-X_scaled = StandardScaler().fit_transform(X)
-
-pca = PCA(n_components=100, random_state=42)
-X_pca = pca.fit_transform(X_scaled)
-print("Explained variance sum:", pca.explained_variance_ratio_.sum())
-Explained Variance ≈ 32.56 % after 100 components
-For visualization: PCA → 50 components → t-SNE (2D, perplexity = 30).
-
-🤖 3. Clustering Algorithms
-Algorithm	Key Parameters	Silhouette ↑	DB Index ↓	# Clusters
-K-Means	K = 2 (best by Silhouette)	0.0836	3.2148	2
-Agglomerative	Ward linkage, K = 2	0.0756	3.4624	2
-DBSCAN	ϵ = 2.5, MinPts = 5	0.0319	0.8611	2 (+ noise)
-
-python
-Copy code
-from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+AN
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 kmeans = KMeans(n_clusters=2, random_state=42).fit(X_pca)
@@ -443,39 +361,6 @@ Future work: replace handcrafted features with deep CNN embeddings for higher cl
 
 All outputs and metrics are stored in the clustering_outputs/ directory.
 
-🛠️ 2. Technical Pipeline Breakdown
-🔹 2.1 Data & Preprocessing
-
-Combines all images from chest_xray/train, val, and test.
-
-Conversion: Read with OpenCV → Grayscale.
-
-Resize: 256×256 pixels.
-
-Normalization: Pixel values normalized to range [0, 255].
-
-🔹 2.2 Feature Extraction
-Feature	Method	Key Parameters	Dimension
-Intensity Histogram (v<sub>hist</sub>)	Global pixel intensity distribution	256 bins	256
-HOG (v<sub>HOG</sub>)	Histogram of Oriented Gradients	orientations=9, pixels_per_cell=(8,8), cells_per_block=(2,2)	~34,596
-LBP (v<sub>LBP</sub>)	Local Binary Pattern	P=8, R=1, 59 uniform bins	59
-Hu Moments (v<sub>Hu</sub>)	Shape invariants (log-scaled moments)	7 invariant moments	7
-
-➡️ Total Feature Vector Dimension: ≈ 34,918
-
-🔹 2.3 Feature Normalization & Reduction
-
-Standardization: StandardScaler (zero mean, unit variance).
-
-Dimensionality Reduction (for Clustering): PCA → 100 components (explained variance ≈ 32.56%).
-
-Visualization: PCA → 50 components → t-SNE (2D, perplexity=30).
-
-Distance Metric: Euclidean (L₂)
-
-🤖 3. Clustering Methods & Parameters
-
-Clustering performed on 100D PCA-reduced feature space.
 
 Method	Parameters	Results Summary
 K-Means	Optimal K=2 via Silhouette Analysis (K∈[2,6])	Silhouette = 0.0836
