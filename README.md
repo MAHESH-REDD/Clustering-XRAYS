@@ -23,7 +23,6 @@ The workflow integrates:
 
 All `.jpeg` or `.png` files from `train/`, `val/`, and `test/` are combined.
 
-```python
 import cv2, glob, numpy as np
 from tqdm import tqdm
 
